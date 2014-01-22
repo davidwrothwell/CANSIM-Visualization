@@ -1,0 +1,644 @@
+\documentclass{article}
+\usepackage[margin=0.01in,paperwidth=13in]{geometry}
+%Use geometry package. Make page margins as small as possible to put as much stuff on the page as possible
+%Make the paper width wider than normal in order to fit everything on the page
+\begin{document}
+
+<<echo=FALSE,results='asis',message=FALSE,warning=FALSE>>=
+library(xtable)
+library(ggplot2)
+library(reshape)
+library(stringr)
+library(scales)
+library(Hmisc)
+library(grid)
+fileUrl <- "http://www20.statcan.gc.ca/tables-tableaux/cansim/csv/02020802-eng.zip"
+temp <- tempfile()
+download.file(fileUrl, temp)
+data.test <- read.csv(unz(temp, "02020802-eng.csv"))
+unlink(temp)
+###Above I have grabbed the data directly from the website
+data.test<-data.test[,c(-7,-6)] #Dropping "vector" columns
+colnames(data.test)<-c("Year","Geography","Line","Statistic","Population","Value") #labelling
+
+geo<-c("Atlantic provinces","Newfoundland and Labrador", #Creating vector for geographies of interest
+       "New Brunswick","Nova Scotia","Prince Edward Island",
+       "Prairie provinces","Alberta","Manitoba","Saskatchewan",
+       "British Columbia","Ontario","Quebec","Canada")
+population<-c("Females","Males","Persons under 18 years", #Creating vector for populations of interest
+              "Persons 18 to 64 years","Persons 65 years and over",
+              "Persons in economic families",
+              "Persons under 18 years in female lone-parent families",
+              "Persons under 18 years in two-parent families",
+              "Unattached individuals","All persons")
+data2<-subset(data.test,!is.na(data.test$Population)&!is.na(data.test$Geography)& #Drop NA values
+                (data.test$Geography %in% geo)) #Keep all rows where Geography column matches
+  
+#Small data cleaning...reordering and renaming certain factor levels
+data2$Value<-as.numeric(as.character(data2$Value)) #Change value from factor to numeric
+#Below I am reordering the factor levels of Geography and Population since I can't do it within Hmisc functions
+data2$Geography<-ordered(data2$Geography,levels=c("Atlantic provinces","Newfoundland and Labrador",
+                                                  "New Brunswick","Nova Scotia","Prince Edward Island",
+                                                  "Prairie provinces","Alberta","Manitoba","Saskatchewan",
+                                                  "British Columbia","Ontario","Quebec","Canada"))
+data2$Population<-ordered(data2$Population,levels=c("Females","Males","Persons under 18 years",
+                                                    "Persons 18 to 64 years","Persons 65 years and over",
+                                                    "Persons in economic families","Persons under 18 years in female lone-parent families","Persons under 18 years in two-parent families","Unattached individuals","All persons",
+              "Females (x 1,000)","Males (x 1,000)","Persons under 18 years (x 1,000)",
+              "Persons 18 to 64 years (x 1,000)","Persons 65 years and over (x 1,000)",
+              "Persons in economic families (x 1,000)",
+              "Persons under 18 years in female lone-parent families (x 1,000)",
+              "Persons under 18 years in two-parent families (x 1,000)",
+              "Unattached individuals (x 1,000)","All persons (x 1,000)")
+                                                    )
+data2$Population<-revalue(data2$Population,c("Persons under 18 years in female lone-parent families"="Child in single mother families","Persons under 18 years in two-parent families"="Child in two-parent families"))
+#End of data cleaning
+
+#1a. Pov. rates across time and Population 2000 onwards for LICO
+#We subset the data to specify Overall canada geography, ratios rather than counts and the proper Line
+#I am asking Hmisc to summarize Value (Pov rates) by Population and by Year.
+#Method cross is the only way to map 3 variables at once. It automatically resorts to aggregation via MEAN
+#However given that we already have individual Pov rates for all Population-Year, Hmisc does not aggregate
+#anything. Essentially, this code is here to be readily applied to more difficult datasets, but it is not
+#the most direct approach for the CANSIM data
+#I cannot remove the counts (N) from the table.
+tab1a<-with(subset(data2,Year>=2000&Geography=="Canada"&Statistic=="Percentage of persons in low income"&(Population %in% population)&
+              as.character(data2$Line)=="Low income cut-offs after tax, 1992 base"),
+            summary(Value~Population+factor(Year),method='cross',overall=FALSE,prn=FALSE,prnmiss=FALSE))
+latex(tab1a,file="",caption="LICO Poverty rates by Population",caption.loc="bottom")
+#1b. Pov. rates across time and Population 2000 onwards for LIM
+tab1b<-with(subset(data2,data2$Year>=2000&data2$Geography=="Canada"&data2$Statistic=="Percentage of persons in low income"&(Population %in% population)&
+              data2$Line=="Low income measure after tax"),
+     summary(Value~Population+factor(Year),method='cross',overall=FALSE))
+latex(tab1b,file="",caption="LIM Poverty rates by Population",caption.loc="bottom")
+#1c. Pov. rates across time and Population 2000 onwards for MBM
+tab1c<-with(subset(data2,data2$Year>=2000&data2$Geography=="Canada"&data2$Statistic=="Percentage of persons in low income"&(Population %in% population)&
+              data2$Line=="Market basket measure, 2011 base"),
+     summary(Value~Population+factor(Year),method='cross',overall=FALSE))
+latex(tab1c,file="",caption="MBM Poverty rates by Population",caption.loc="bottom")
+#2a. Pov rates across time and Geography 2000 onwards for LICO
+#We subset the data to specify overall All persons population, ratios rather than counts and the proper line
+#I ask Hmisc to evaluate Value (pov rates) by Geography and Year
+tab2a<-with(subset(data2,data2$Year>=2000&data2$Population=="All persons"&data2$Statistic=="Percentage of persons in low income"&
+              data2$Line=="Low income cut-offs after tax, 1992 base"),
+     summary(Value~Geography+factor(Year),method='cross',overall=FALSE,prn=FALSE,prnmiss=FALSE))
+latex(tab2a,file="",caption="LICO Poverty by Province",caption.loc="bottom")
+#2b. Pov rates across time and Geography 2000 onwards for LIM
+tab2b<-with(subset(data2,data2$Year>=2000&data2$Population=="All persons"&data2$Statistic=="Percentage of persons in low income"&
+              data2$Line=="Low income measure after tax"),
+     summary(Value~Geography+factor(Year),method='cross',overall=FALSE))
+latex(tab2b,file="",caption="LIM Poverty by Province",caption.loc="bottom")
+#2c. Pov rates across time and Geography 2000 onwards for MBM
+tab2c<-with(subset(data2,data2$Year>=2000&data2$Population=="All persons"&data2$Statistic=="Percentage of persons in low income"&
+              data2$Line=="Market basket measure, 2011 base"),
+     summary(Value~Geography+factor(Year),method='cross',overall=FALSE))
+latex(tab2c,file="",caption="MBM Poverty by Province",caption.loc="bottom")
+#3. Pov rates across time and Line
+#we subset the data to specify overall ALL persons population, ratios rather than counts and Overall canada geography
+#Hmisc is being difficult, I can't edit individual elements within Hmisc function, so I have to do it out here
+###Little code to make my life easier
+data2$Lines<-ordered(data2$Line,levels=c("Low income cut-offs after tax, 1992 base",
+                                        "Low income measure after tax",
+                                        "Market basket measure, 2011 base",
+                                        "Low income cut-offs before tax, 1992 base"),
+                    labels=c("LICO","LIM","MBM","LICO before tax"))
+###But Not necessary
+#Now I ask Hmisc to evaluate Value (pov rates) by the Poverty measuring lines and Years
+tab3a<-with(subset(data2,data2$Year>=2000&data2$Population=="All persons"&data2$Statistic=="Percentage of persons in low income"&
+                    data2$Geography=="Canada"),
+           summary(Value~Lines+factor(Year),method='cross',prn=FALSE,prnmiss=FALSE,overall=FALSE),rowlabel="Line")
+latex(tab3a,file="",caption="Poverty by Measuring Line",caption.loc="bottom")
+@
+\begin{figure}[ht]
+\begin{center}
+<<echo=FALSE,fig.width=12>>=
+#NOTICE
+#LICO before tax doesn't seem to be comparable to other measures, and so I have found no use for it.
+#I will exclude it from the data. If you require LICO before tax, omit the following line of code
+data2<-subset(data2,!data2$Line=="Low income cut-offs before tax, 1992 base")
+
+
+#1. What is the overall canadian poverty trend over time?
+ggplot(data=subset(data2,data2$Geography=="Canada"&data2$Statistic=="Percentage of persons in low income"&
+                     data2$Population=="All persons"),
+       aes(x=Year,y=Value/100,colour=Line,group=Line))+ #Year on x-axis, pov rate/100 on y-axis and each line gets a different colour
+  ylab("Poverty Rate")+ggtitle("Canadian Poverty Measures")+
+  geom_line()+ #All elements of geom_line taken from ggplot aesthetics arguments
+  geom_point()+ #All elements of geom_point taken from ggplot aesthetics arguemnts
+  scale_y_continuous(breaks=seq(0,max(data2$Value,na.rm=TRUE),.01),labels=percent)+
+  #Give a tick to every 1% pov rate on the y axis and convert pov rates (0<x<1) into percentages
+  theme(legend.direction="horizontal",legend.position="top",axis.text.x=element_text(angle=45))+
+  #Legend reads left to right on top of graph and angle x-axis ticks to 45 degrees
+  scale_x_continuous(breaks=seq(min(data2$Year,na.rm=TRUE),max(data2$Year,na.rm=TRUE),2))
+  #Give a tick to every 2 years on the x-axis, starting from the minimum Year to the maximum Year
+@
+\end{center}
+\end{figure}
+\begin{figure}[ht]
+\begin{center}
+<<echo=FALSE,fig.width=12>>=
+#2. How does the overall trend differ with the child poverty trend?
+ggplot(data=subset(data2,data2$Geography=="Canada"&data2$Statistic=="Percentage of persons in low income"&
+                     (data2$Population=="All persons"|data2$Population=="Persons under 18 years")),
+       aes(x=Year,y=Value/100,colour=Line,linetype=Population))+
+  geom_line()+
+  ylab("Poverty Rate")+ggtitle("Canadian Child Poverty Measures")+
+  scale_y_continuous(breaks=seq(0,max(data2$Value,na.rm=TRUE),.01),labels=percent)+
+  theme(legend.direction="horizontal",legend.position="top",axis.text.x=element_text(angle=45))+
+  scale_x_continuous(breaks=seq(min(data2$Year,na.rm=TRUE),max(data2$Year,na.rm=TRUE),2))
+@
+\end{center}
+\end{figure}
+\begin{figure}[ht]
+\begin{center}
+<<echo=FALSE,fig.width=12>>=
+#3a. What are the age-based poverty rates?
+ggplot(data=subset(data2,data2$Geography=="Canada"&data2$Statistic=="Percentage of persons in low income"&
+                     !data2$Line=="Market basket measure, 2011 base"&
+                     (data2$Population=="Persons under 18 years"|
+                        data2$Population=="Persons 18 to 64 years"|data2$Population=="Persons 65 years and over")),
+       aes(x=Year,y=Value/100,colour=Population))+
+  geom_line()+ # All elements from geom_line taken from ggplot aesthetics arguments
+  facet_grid(.~Line)+ #Split the plot into side-by-side plots using different Poverty measuring lines
+  ylab("Poverty Rate")+xlab("Year")+ggtitle("Poverty across ages")+ #Naming
+  #Give a tick to every 2% pov rate on the y axis from 0 to the maximum Poverty value and change values to percents
+  scale_y_continuous(breaks=seq(0,max(data2$Value,na.rm=TRUE),.02),labels=percent)+
+  #Put legend on top and read from left to right
+  theme(legend.direction="horizontal",legend.position="top",axis.text.x=element_text(angle=45))+
+  scale_x_continuous(breaks=c(min(data2$Year,na.rm=TRUE),seq(1980,max(data2$Year,na.rm=TRUE),5)))
+@
+\end{center}
+\end{figure}
+\begin{figure}[ht]
+\begin{center}
+<<echo=FALSE,fig.width=12>>=
+#3b. How do age-based poverty rates compare?
+ggplot(data=subset(data2,data2$Geography=="Canada"&data2$Statistic=="Percentage of persons in low income"&
+                     !data2$Line=="Market basket measure, 2011 base"&
+                     (data2$Population=="Persons under 18 years"|data2$Population=="Persons 18 to 64 years"|
+                        data2$Population=="Persons 65 years and over")),
+       aes(x=Year,y=Value/100,fill=Population))+geom_area(stat="identity")+facet_grid(.~Line)+
+  ylab("Poverty Rate")+ggtitle("Comparing Poverty across ages")+
+  scale_y_continuous(breaks=seq(0,max(data2$Value,na.rm=TRUE),.1),labels=percent)+
+  theme(legend.direction="horizontal",legend.position="top",axis.text.x=element_text(angle=45))+
+    scale_x_continuous(breaks=c(min(data2$Year,na.rm=TRUE),seq(1980,max(data2$Year,na.rm=TRUE),5)))
+@
+\end{center}
+\end{figure}
+\begin{figure}[ht]
+\begin{center}
+<<echo=FALSE,fig.width=12>>=
+#3c. What is the poverty variance across ages?
+ggplot(data=subset(data2,!data2$Line=="Market basket measure, 2011 base"&data2$Geography=="Canada"&
+                     data2$Statistic=="Percentage of persons in low income"&
+                     (data2$Population=="Persons under 18 years"|
+                        data2$Population=="Persons 18 to 64 years"|data2$Population=="Persons 65 years and over")),
+       aes(x=Population,y=Value/100,fill=Population))+ #Put different Populations on x axis and Pov rate on y axis and create/fill additional boxplots for every different Population
+  geom_boxplot()+
+  facet_grid(.~Line)+ #Split plot into side-by-side plots using different Povert measuring lines
+  ggtitle("Poverty variance across ages")+ylab("Poverty Rate")+
+  scale_y_continuous(breaks=seq(0,max(data2$Value,na.rm=TRUE),.05),labels=percent)+
+  theme(legend.direction="horizontal",legend.position="top")+
+  scale_x_discrete(labels=c("Children","Adults","Elderly"))
+@
+\end{center}
+\end{figure}
+\begin{figure}[ht]
+\begin{center}
+<<echo=FALSE,fig.width=12>>=
+#3d. What is the age of the poor?
+ggplot(data=subset(data2,data2$Geography=="Canada"&data2$Statistic=="Number of persons in low income"&
+                   !data2$Line=="Market basket measure, 2011 base"&
+                     (data2$Population=="Persons under 18 years (x 1,000)"|
+                        data2$Population=="Persons 18 to 64 years (x 1,000)"|
+                        data2$Population=="Persons 65 years and over (x 1,000)")),
+       aes(x=Year,y=Value,fill=Population))+geom_area(stat="identity",position="fill")+
+         facet_grid(.~Line)+ylab("Composition of the poor")+ggtitle("Age of the Poor")+
+  scale_y_continuous(labels=percent)+
+  theme(legend.direction="horizontal",legend.position="top",axis.text.x=element_text(angle=45))+
+  scale_fill_discrete(labels=c("Persons under 18 years","Persons 18 to 64 years",
+                               "Persons 65 years and over"))+
+  scale_x_continuous(breaks=c(min(data2$Year,na.rm=TRUE),seq(1980,max(data2$Year,na.rm=TRUE),5)))
+
+@
+\end{center}
+\end{figure}
+\begin{figure}[ht]
+\begin{center}
+<<echo=FALSE,fig.width=12>>=
+#4a. What are the gender based poverty rates?
+ggplot(data=subset(data2,data2$Geography=="Canada"&data2$Statistic=="Percentage of persons in low income"&
+                     !data2$Line=="Market basket measure, 2011 base"&
+                     (data2$Population=="Males"|data2$Population=="Females")),
+       aes(x=Year,y=Value/100,colour=Population))+geom_line()+facet_grid(.~Line)+
+  ylab("Poverty rate")+ggtitle("Poverty across genders")+
+  scale_y_continuous(breaks=seq(0,max(data2$Value,na.rm=TRUE),.01),labels=percent)+
+  theme(legend.direction="horizontal",legend.position="top",axis.text.x=element_text(angle=45))+
+  scale_x_continuous(breaks=c(min(data2$Year,na.rm=TRUE),seq(1980,max(data2$Year,na.rm=TRUE),5)))
+@
+\end{center}
+\end{figure}
+\begin{figure}[ht]
+\begin{center}
+<<echo=FALSE,fig.width=12>>=
+#4b. How do gender-based poverty rates compare?
+ggplot(data=subset(data2,data2$Geography=="Canada"&data2$Statistic=="Percentage of persons in low income"&
+                     !data2$Line=="Market basket measure, 2011 base"&
+                     (data2$Population=="Males"|data2$Population=="Females")),
+       aes(x=Year,y=Value/100,fill=Population))+geom_area(stat="identity")+facet_grid(.~Line)+
+  ylab("Poverty rate")+ggtitle("Comparing Poverty across genders")+
+  scale_y_continuous(breaks=seq(0,max(data2$Value,na.rm=TRUE),.1),labels=percent)+
+  theme(legend.direction="horizontal",legend.position="top",axis.text.x=element_text(angle=45))+
+  scale_x_continuous(breaks=c(min(data2$Year,na.rm=TRUE),seq(1980,max(data2$Year,na.rm=TRUE),5)))
+@
+\end{center}
+\end{figure}
+\begin{figure}[ht]
+\begin{center}
+<<echo=FALSE,fig.width=12>>=
+#4c. What is the poverty variance across genders?
+ggplot(data=subset(data2,data2$Geography=="Canada"&data2$Statistic=="Percentage of persons in low income"&
+                     !data2$Line=="Market basket measure, 2011 base"&
+                     (data2$Population=="Males"|data2$Population=="Females")),
+       aes(x=Population,y=Value/100,fill=Population))+geom_boxplot()+facet_grid(.~Line)+
+  ylab("Poverty rate")+ggtitle("Poverty variance across genders")+ guides(fill=FALSE)+
+  scale_y_continuous(breaks=seq(0,max(data2$Value,na.rm=TRUE),.01),labels=percent)
+@
+\end{center}
+\end{figure}
+\begin{figure}[ht]
+\begin{center}
+<<echo=FALSE,fig.width=12>>=
+#4d. What is the gender of the poor?
+ggplot(data=subset(data2,data2$Geography=="Canada"&data2$Statistic=="Number of persons in low income"&
+                     !data2$Line=="Market basket measure, 2011 base"&
+                     (data2$Population=="Males (x 1,000)"|data2$Population=="Females (x 1,000)")),
+       aes(x=Year,y=Value,fill=Population))+geom_area(stat="identity",position="fill")+
+  facet_grid(.~Line)+ylab("Composition of the poor")+ggtitle("Gender of the Poor")+
+  scale_y_continuous(labels=percent)+
+  theme(legend.direction="horizontal",legend.position="top",axis.text.x=element_text(angle=45))+
+  scale_x_continuous(breaks=c(min(data2$Year,na.rm=TRUE),seq(1980,max(data2$Year,na.rm=TRUE),5)))
+@
+\end{center}
+\end{figure}
+\clearpage
+\begin{figure}[ht]
+\begin{center}
+<<echo=FALSE,fig.width=12>>=
+#6a. What are the broader geographical based poverty rates?
+ggplot(data=subset(data2,(data2$Geography=="Atlantic provinces"|
+                            data2$Geography=="Prairie provinces"|data2$Geography=="Ontario"|
+                            data2$Geography=="British Columbia"|data2$Geography=="Quebec")&
+                     !data2$Line=="Market basket measure, 2011 base"&data2$Population=="All persons"&
+                     data2$Statistic=="Percentage of persons in low income"),
+       aes(x=Year,y=Value/100,colour=Geography))+geom_line()+facet_grid(.~Line)+
+  ylab("Poverty Rate")+ggtitle("Poverty aross broader geography")+
+  scale_y_continuous(breaks=seq(0,max(data2$Value,na.rm=TRUE),.02),labels=percent)+
+  theme(legend.direction="horizontal",legend.position="top",axis.text.x=element_text(angle=45))+
+  scale_x_continuous(breaks=c(min(data2$Year,na.rm=TRUE),seq(1980,max(data2$Year,na.rm=TRUE),5)))
+@
+\end{center}
+\end{figure}
+\begin{figure}[ht]
+\begin{center}
+<<echo=FALSE,fig.width=12>>=
+#6b. How do broader geographical-based poverty rates compare?
+ggplot(data=subset(data2,(data2$Geography=="Atlantic provinces"|data2$Geography=="Prairie provinces"|
+                            data2$Geography=="Ontario"|data2$Geography=="British Columbia"|
+                            data2$Geography=="Quebec")&
+                     !data2$Line=="Market basket measure, 2011 base"&data2$Population=="All persons"&
+                     data2$Statistic=="Percentage of persons in low income"),
+       aes(x=Year,y=Value/100,fill=Geography))+geom_area(stat="identity")+facet_grid(.~Line)+
+  ylab("Poverty Rate")+ggtitle("Comparing Poverty aross broader geography")+
+  scale_y_continuous(breaks=seq(0,max(data2$Value,na.rm=TRUE),.1),labels=percent)+
+  theme(legend.direction="horizontal",legend.position="top",axis.text.x=element_text(angle=45))+
+  scale_x_continuous(breaks=c(min(data2$Year,na.rm=TRUE),seq(1980,max(data2$Year,na.rm=TRUE),5)))
+@
+\end{center}
+\end{figure}
+\begin{figure}[ht]
+\begin{center}
+<<echo=FALSE,fig.width=12>>=
+#6c. What is the poverty variance across broader geography?
+ggplot(data=subset(data2,!data2$Line=="Market basket measure, 2011 base"&data2$Population=="All persons"&
+                     (data2$Geography=="Canada"|data2$Geography=="Atlantic provinces"|
+                        data2$Geography=="Prairie provinces"|data2$Geography=="Ontario"|
+                        data2$Geography=="British Columbia"|data2$Geography=="Quebec")&
+                     data2$Statistic=="Percentage of persons in low income"),
+       aes(x=Geography,y=Value/100,fill=Geography))+geom_boxplot()+facet_grid(.~Line)+
+  ggtitle("Poverty variance across broader geography")+ylab("Poverty Rate")+
+  scale_y_continuous(breaks=seq(0,max(data2$Value,na.rm=TRUE),0.05),labels=percent)+
+  theme(legend.direction="horizontal",legend.position="top")+
+  scale_x_discrete(breaks=NULL)
+@
+\end{center}
+\end{figure}
+\begin{figure}[ht]
+\begin{center}
+<<echo=FALSE,fig.width=12>>=
+#6d. What is the broader geography of the poor?
+ggplot(data=subset(data2,(data2$Geography=="Atlantic provinces"|data2$Geography=="Prairie provinces"|
+                            data2$Geography=="Ontario"|data2$Geography=="British Columbia"|
+                            data2$Geography=="Quebec")&
+                     !data2$Line=="Market basket measure, 2011 base"&
+                     data2$Population=="All persons (x 1,000)"&
+                     data2$Statistic=="Number of persons in low income"),
+       aes(x=Year,y=Value,fill=Geography))+geom_area(stat="identity",position="fill")+
+  facet_grid(.~Line)+ylab("Composition of the poor")+ggtitle("Broader Geography of the Poor")+
+  scale_y_continuous(labels=percent)+
+  theme(legend.direction="horizontal",legend.position="top",axis.text.x=element_text(angle=45))+
+  scale_x_continuous(breaks=c(min(data2$Year,na.rm=TRUE),seq(1980,max(data2$Year,na.rm=TRUE),5)))
+@
+\end{center}
+\end{figure}
+\begin{figure}[ht]
+\begin{center}
+<<echo=FALSE,fig.width=12>>=
+#5a. What are the geographical based poverty rates?
+ggplot(data=subset(data2,(!data2$Geography=="Canada"&!data2$Geography=="Atlantic provinces"&
+                     !data2$Geography=="Prairie provinces")&data2$Statistic=="Percentage of persons in low income"&
+                     data2$Population=="All persons"&!data2$Line=="Market basket measure, 2011 base"),
+       aes(x=Year,y=Value/100,colour=Geography))+geom_line()+facet_grid(Line~.)+
+  ylab("Poverty Rate")+ggtitle("Poverty aross provinces")+
+  scale_y_continuous(breaks=seq(0,max(data2$Value,na.rm=TRUE),.05),labels=percent)+
+  theme(axis.text.x=element_text(angle=45))+
+  scale_x_continuous(breaks=c(min(data2$Year,na.rm=TRUE),seq(1980,max(data2$Year,na.rm=TRUE),5)))
+@
+\end{center}
+\end{figure}
+\begin{figure}[ht]
+\begin{center}
+<<echo=FALSE,fig.width=12>>=
+#5b. How do geographical-based poverty rates compare?
+ggplot(data=subset(data2,(!data2$Geography=="Canada"&!data2$Geography=="Atlantic provinces"&
+                            !data2$Geography=="Prairie provinces")&data2$Statistic=="Percentage of persons in low income"&
+                     data2$Population=="All persons"&!data2$Line=="Market basket measure, 2011 base"),
+       aes(x=Year,y=Value/100,fill=Geography))+geom_area(stat="identity")+facet_grid(.~Line)+
+  ylab("Poverty Rate")+ggtitle("Comparing Poverty aross provinces")+
+  scale_y_continuous(breaks=seq(0,max(data2$Value,na.rm=TRUE),.1),labels=percent)+
+  theme(axis.text.x=element_text(angle=45))+
+  scale_x_continuous(breaks=c(min(data2$Year,na.rm=TRUE),seq(1980,max(data2$Year,na.rm=TRUE),5)))
+@
+\end{center}
+\end{figure}
+\begin{figure}[ht]
+\begin{center}
+<<echo=FALSE,fig.width=12>>=
+#5c. What is the poverty variance across geography?
+ggplot(data=subset(data2,!data2$Line=="Market basket measure, 2011 base"&data2$Population=="All persons"&
+                     (!data2$Geography=="Canada"&!data2$Geography=="Atlantic provinces"&
+                        !data2$Geography=="Prairie provinces")&data2$Statistic=="Percentage of persons in low income"),
+       aes(x=Geography,y=Value/100,fill=Geography))+geom_boxplot()+facet_grid(Line~.)+
+  ggtitle("Poverty variance across provinces")+ylab("Poverty Rate")+
+  scale_y_continuous(breaks=seq(0,max(data2$Value,na.rm=TRUE),0.05),labels=percent)+
+  scale_x_discrete(labels=c("NL","NB","NS","PI","AB","MB","SK","BC","ON",'QC'))
+@
+\end{center}
+\end{figure}
+\begin{figure}[ht]
+\begin{center}
+<<echo=FALSE,fig.width=12>>=
+#5d. What is the geography of the poor?
+ggplot(data=subset(data2,(!data2$Geography=="Canada"&!data2$Geography=="Atlantic provinces"&
+                            !data2$Geography=="Prairie provinces")&data2$Statistic=="Number of persons in low income"&
+                     data2$Population=="All persons (x 1,000)"&
+                     !data2$Line=="Market basket measure, 2011 base"),
+       aes(x=Year,y=Value,fill=Geography))+geom_area(stat="identity",position="fill")+facet_grid(.~Line)+
+  ylab("Composition of the poor")+ggtitle("Geography of the poor")+scale_y_continuous(labels=percent)+
+  theme(axis.text.x=element_text(angle=45))+
+  scale_x_continuous(breaks=c(min(data2$Year,na.rm=TRUE),seq(1980,max(data2$Year,na.rm=TRUE),5)))
+@
+\end{center}
+\end{figure}
+\begin{figure}[ht]
+\begin{center}
+<<echo=FALSE,fig.width=12>>=
+#2011
+
+#7a. Which age group currently has the highest  poverty rate [PARETO PLOT]
+#LIM
+ggplot(data=subset(data2,data2$Year==max(data2$Year)&data2$Line=="Low income measure after tax"
+                   &data2$Geography=="Canada"&data2$Statistic=="Percentage of persons in low income"&
+                     (data2$Population=="Persons under 18 years"|data2$Population=="Persons 18 to 64 years"|
+                        data2$Population=="Persons 65 years and over")),
+       aes(x=reorder(Population,-Value),y=Value/100,fill=Population))+geom_bar(stat="identity")+
+  ylab("Poverty Rate")+xlab("Population")+ggtitle("2011 LIM Poverty rate-age Pareto plot")+guides(fill=FALSE)+
+  scale_y_continuous(breaks=seq(0,max(data2$Value,na.rm=TRUE),0.01),labels=percent)
+#Pareto plots rely on descending order of bars therefore I can't facet between LIM-MBM and LICO since their orders are different
+#Now LICO
+@
+\end{center}
+\end{figure}
+\begin{figure}[ht]
+\begin{center}
+<<echo=FALSE,fig.width=12>>=
+ggplot(data=subset(data2,data2$Year==max(data2$Year)&data2$Line=="Low income cut-offs after tax, 1992 base"&
+                     data2$Geography=="Canada"&data2$Statistic=="Percentage of persons in low income"&
+                     (data2$Population=="Persons under 18 years"|data2$Population=="Persons 18 to 64 years"|
+                        data2$Population=="Persons 65 years and over")),
+       aes(x=reorder(Population,-Value),y=Value/100,fill=Population))+geom_bar(stat="identity")+
+  ylab("Poverty Rate")+xlab("Population")+ggtitle("2011 LICO Poverty rate-age Pareto plot")+guides(fill=FALSE)+
+  scale_y_continuous(breaks=seq(0,max(data2$Value,na.rm=TRUE),0.01),labels=percent)
+@
+\end{center}
+\end{figure}
+\begin{figure}[ht]
+\begin{center}
+<<echo=FALSE,fig.width=12>>=
+#Now MBM
+ggplot(data=subset(data2,data2$Year==max(data2$Year)&data2$Line=="Market basket measure, 2011 base"&
+                     data2$Geography=="Canada"&data2$Statistic=="Percentage of persons in low income"&
+                     (data2$Population=="Persons under 18 years"|data2$Population=="Persons 18 to 64 years"|
+                        data2$Population=="Persons 65 years and over")),
+       aes(x=reorder(Population,-Value),y=Value/100,fill=Population))+geom_bar(stat="identity")+
+  ylab("Poverty Rate")+xlab("Population")+ggtitle("2011 MBM Poverty rate-age Pareto plot")+guides(fill=FALSE)+
+  scale_y_continuous(breaks=seq(0,max(data2$Value,na.rm=TRUE),0.01),labels=percent)
+@
+\end{center}
+\end{figure}
+\begin{figure}[ht]
+\begin{center}
+<<echo=FALSE,fig.width=12>>=
+#7b. Which age group currently has the highest poverty population? [FULL PARETO PLOT]
+a<-arrange(subset(data2,data2$Year==max(data2$Year)&data2$Geography=="Canada"&
+            data2$Statistic=="Number of persons in low income"&
+                    (data2$Population=="Persons under 18 years (x 1,000)"|
+                       data2$Population=="Persons 18 to 64 years (x 1,000)"|
+               data2$Population=="Persons 65 years and over (x 1,000)")&
+           data2$Line=="Low income cut-offs after tax, 1992 base"),desc(Value)) 
+a$cumsum<-cumsum(a$Value)
+#First lets arrange our subset of data (since we want to examine age group, we leave all values for age group,
+#and exclude or control for others). Select the Line to use. Taking the subset, arrange it by Value in descending order.
+#Then create a culumulative sum variable in that order
+#Now on the x-axis, plot in Age groups in descending order of value
+#LICO
+g1<-ggplot(data=a,
+       aes(x=reorder(Population,-Value)))+ #Arrange Population on x-axis from highest to lowest
+       geom_bar(stat="identity",aes(y=Value,fill=Population))+ #Measured by pov rate, each Population gets a bar
+  geom_line(aes(y=cumsum,group=1))+#Plot the cumsum line
+  geom_point(aes(y=cumsum))+ #Plot the points of the cumsum line
+  ylab("Total Poverty Count (per 1,000 persons)")+xlab("Population")+ggtitle("2011 LICO")+
+  guides(fill=FALSE)+scale_y_continuous(breaks=seq(0,max(data2$Value,na.rm=TRUE),500))+
+  scale_x_discrete(labels=c("Adults","Children","Elderly"))
+#LIM
+b<-arrange(subset(data2,data2$Year==max(data2$Year)&data2$Geography=="Canada"&
+                    data2$Statistic=="Number of persons in low income"&
+                    (data2$Population=="Persons under 18 years (x 1,000)"|
+                       data2$Population=="Persons 18 to 64 years (x 1,000)"|
+                       data2$Population=="Persons 65 years and over (x 1,000)")&
+                    data2$Line=="Low income measure after tax"),desc(Value)) 
+b$cumsum<-cumsum(b$Value)
+g2<-ggplot(data=b,
+       aes(x=reorder(Population,-Value)))+
+  geom_bar(stat="identity",aes(y=Value,fill=Population))+
+  geom_line(aes(y=cumsum,group=1))+geom_point(aes(y=cumsum))+
+  ylab("Total Poverty Count (per 1,000 persons)")+xlab("Population")+ggtitle("2011 LIM")+
+  guides(fill=FALSE)+scale_y_continuous(breaks=seq(0,max(data2$Value,na.rm=TRUE),500))+
+  scale_x_discrete(labels=c("Adults","Children","Elderly"))
+#MBM
+c<-arrange(subset(data2,data2$Year==max(data2$Year)&data2$Geography=="Canada"&
+                    data2$Statistic=="Number of persons in low income"&
+                    (data2$Population=="Persons under 18 years (x 1,000)"|
+                       data2$Population=="Persons 18 to 64 years (x 1,000)"|
+                       data2$Population=="Persons 65 years and over (x 1,000)")&
+                    data2$Line=="Market basket measure, 2011 base"),desc(Value)) 
+c$cumsum<-cumsum(c$Value)
+g3<-ggplot(data=c,
+       aes(x=reorder(Population,-Value)))+
+  geom_bar(stat="identity",aes(y=Value,fill=Population))+
+  geom_line(aes(y=cumsum,group=1))+geom_point(aes(y=cumsum))+
+  ylab("Total Poverty Count (per 1,000 persons)")+xlab("Population")+ggtitle("2011 MBM")+
+  guides(fill=FALSE)+scale_y_continuous(breaks=seq(0,max(data2$Value,na.rm=TRUE),500))+
+  scale_x_discrete(labels=c("Adults","Children","Elderly"))
+
+#Creating custom function to place entirely seperate ggplot graphics together using "Grid" package
+layout<-grid.layout(nrow=1,ncol=3)
+vplayout<-function(...){
+  grid.newpage()
+  pushViewport(viewport(layout=layout))
+}
+subplot<-function(x,y) viewport(layout.pos.row=x,layout.pos.col=y)
+mmplot<-function(a,b,c){
+  vplayout()
+  print(a,vp=subplot(1,1))
+  print(b,vp=subplot(1,2))
+  print(c,vp=subplot(1,3))
+}
+mmplot(g1,g2,g3)
+@
+\end{center}
+\end{figure}
+\begin{figure}[ht]
+\begin{center}
+<<echo=FALSE,fig.width=12>>=
+#8a. Which province currently has the highest poverty count? [PARETO]
+#LICO
+ggplot(data=subset(data2,data2$Year==max(data2$Year)&data2$Line=="Low income cut-offs after tax, 1992 base"&
+                    (!data2$Geography=="Canada"&!data2$Geography=="Atlantic provinces"&!data2$Geography=="Prairie provinces")
+                  &data2$Statistic=="Percentage of persons in low income"&data2$Population=="All persons"),
+      aes(x=reorder(Geography,-Value),y=Value/100,fill=Geography))+
+  geom_bar(stat="identity")+
+  ylab("Poverty Rate")+xlab("Province")+ggtitle("2011 LICO Poverty-Province Pareto plot")+guides(fill=FALSE)+
+  scale_y_continuous(breaks=seq(0,max(data2$Value,na.rm=TRUE),0.01),labels=percent)+
+  scale_x_discrete(labels=c("BC","QC","ON","MN","NS","AB","NB","NL","SK","PI"))
+@
+\end{center}
+\end{figure}
+\begin{figure}[ht]
+\begin{center}
+<<echo=FALSE,fig.width=12>>=
+#LIM
+ggplot(data=subset(data2,data2$Year==max(data2$Year)&data2$Line=="Low income measure after tax"&
+                     (!data2$Geography=="Canada"&!data2$Geography=="Atlantic provinces"&!data2$Geography=="Prairie provinces")
+                   &data2$Statistic=="Percentage of persons in low income"&data2$Population=="All persons"),
+       aes(x=reorder(Geography,-Value),y=Value/100,fill=Geography))+geom_bar(stat="identity")+
+  ylab("Poverty Rate")+xlab("Province")+ggtitle("2011 LIM Poverty-Province Pareto plot")+guides(fill=FALSE)+
+  scale_y_continuous(breaks=seq(0,max(data2$Value,na.rm=TRUE),0.01),labels=percent)+
+  scale_x_discrete(labels=c("BC","PI","MN","QC","NL","NS","NB","ON","SK","AB"))
+
+@
+\end{center}
+\end{figure}
+\begin{figure}[ht]
+\begin{center}
+<<echo=FALSE,fig.width=12>>=
+#MBM
+ggplot(data=subset(data2,data2$Year==max(data2$Year)&data2$Line=="Market basket measure, 2011 base"&
+                     (!data2$Geography=="Canada"&!data2$Geography=="Atlantic provinces"&!data2$Geography=="Prairie provinces")
+                   &data2$Statistic=="Percentage of persons in low income"&data2$Population=="All persons"),
+       aes(x=reorder(Geography,-Value),y=Value/100,fill=Geography))+geom_bar(stat="identity")+
+  ylab("Poverty Rate")+xlab("Province")+ggtitle("2011 MBM Poverty-Province Pareto plot")+guides(fill=FALSE)+
+  scale_y_continuous(breaks=seq(0,max(data2$Value,na.rm=TRUE),0.01),labels=percent)+
+  scale_x_discrete(labels=c("BC","NS",'PI','NB','ON','NL','MN','QC','SK','AB'))
+@
+\end{center}
+\end{figure}
+\begin{figure}[ht]
+\begin{center}
+<<echo=FALSE,fig.width=12>>=
+#8b. Which Province currently has the highest poverty population? [FULL PARETO PLOT]
+b<-subset(data2,data2$Year==max(data2$Year)&(!data2$Geography=="Canada"&!data2$Geography=="Atlantic provinces"&
+                                               !data2$Geography=="Prairie provinces")&
+            data2$Statistic=="Number of persons in low income"&data2$Population=="All persons")
+          #First create our subset data b which now contains all provinces but one age group "All persons"
+#LICO
+d<-arrange(subset(data2,data2$Year==max(data2$Year)&(!data2$Geography=="Canada"&!data2$Geography=="Atlantic provinces"&
+                                                       !data2$Geography=="Prairie provinces")&
+                    data2$Statistic=="Number of persons in low income"&
+                    (data2$Population=="All persons (x 1,000)")&
+                    data2$Line=="Low income cut-offs after tax, 1992 base"),desc(Value)) 
+d$cumsum<-cumsum(d$Value)
+#Now our subset consists of all provinces, but keeps Population at "All persons".
+#Select the Line to use. Taking the subset, arrange it by Value in descending order.
+#Then create a culumulative sum variable in that order
+#Now on the x-axis, plot in Age groups in descending order of value
+#LICO
+g4<-ggplot(data=d,
+       aes(x=reorder(Geography,-Value)))+
+  geom_bar(stat="identity",aes(y=Value,fill=Geography))+
+  geom_line(aes(y=cumsum,group=1))+geom_point(aes(y=cumsum))+
+  ylab("Total Poverty Count (per 1,000 persons)")+xlab("Population")+ggtitle("2011 LICO")+
+  scale_y_continuous(breaks=seq(0,max(data2$Value,na.rm=TRUE),500))+
+  scale_x_discrete(labels=c('ON','QC','BC','AB','MN','NS','SK','NB','NL','PI'))+guides(fill=F)
+
+e<-arrange(subset(data2,data2$Year==max(data2$Year)&(!data2$Geography=="Canada"&!data2$Geography=="Atlantic provinces"&
+                                                       !data2$Geography=="Prairie provinces")&
+                    data2$Statistic=="Number of persons in low income"&
+                    (data2$Population=="All persons (x 1,000)")&
+                    data2$Line=="Low income measure after tax"),desc(Value)) 
+e$cumsum<-cumsum(e$Value)
+#Now our subset consists of all provinces, but keeps Population at "All persons".
+#Select the Line to use. Taking the subset, arrange it by Value in descending order.
+#Then create a culumulative sum variable in that order
+#Now on the x-axis, plot in Age groups in descending order of value
+g5<-ggplot(data=e,
+       aes(x=reorder(Geography,-Value)))+
+  geom_bar(stat="identity",aes(y=Value,fill=Geography))+
+  geom_line(aes(y=cumsum,group=1))+geom_point(aes(y=cumsum))+
+  ylab("Total Poverty Count (per 1,000 persons)")+xlab("Population")+ggtitle("2011 LIM")+
+  scale_y_continuous(breaks=seq(0,max(data2$Value,na.rm=TRUE),500))+
+  scale_x_discrete(labels=c("ON",'QC','BC','AB','MN','NS','SK','NB','NL','PI'))+guides(fill=F)
+
+f<-arrange(subset(data2,data2$Year==max(data2$Year)&(!data2$Geography=="Canada"&!data2$Geography=="Atlantic provinces"&
+                                                       !data2$Geography=="Prairie provinces")&
+                    data2$Statistic=="Number of persons in low income"&
+                    (data2$Population=="All persons (x 1,000)")&
+                    data2$Line=="Market basket measure, 2011 base"),desc(Value)) 
+f$cumsum<-cumsum(f$Value)
+#Now our subset consists of all provinces, but keeps Population at "All persons".
+#Select the Line to use. Taking the subset, arrange it by Value in descending order.
+#Then create a culumulative sum variable in that order
+#Now on the x-axis, plot in Age groups in descending order of value
+g6<-ggplot(data=f,
+       aes(x=reorder(Geography,-Value)))+
+  geom_bar(stat="identity",aes(y=Value,fill=Geography))+
+  geom_line(aes(y=cumsum,group=1))+geom_point(aes(y=cumsum))+
+  ylab("Total Poverty Count (per 1,000 persons)")+xlab("Population")+ggtitle("2011 MBM")+
+  scale_y_continuous(breaks=seq(0,max(data2$Value,na.rm=TRUE),500))+
+  scale_x_discrete(labels=c('ON','QC','BC','AB','MN','NS','SK','NB','NL','PI'))+guides(fill=F)
+
+mmplot(g4,g5,g6)
+@
+\end{center}
+\end{figure}
+\end{document}
