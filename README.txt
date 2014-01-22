@@ -1,0 +1,3 @@
+Hello!
+
+Below you will find R code and tex code necessary to reproduce the ggplot2 graphics using the latest CANSIM 202-0802 Poverty data from Statistics Canada. The R code should be heavily annotated to reproduce the bar plots, line plots, box plots, stacked/filled area plots and Pareto plots. The code should be compatible with future years of data so in successive years, nothing need change in the code - simply recompile it (UNTESTED).
