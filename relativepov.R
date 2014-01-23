@@ -3,11 +3,62 @@
 
 setwd("~/GitHub/CANSIM-Visualization")
 
+library(xtable)
+library(ggplot2)
+library(reshape)
+library(stringr)
+library(scales)
+library(Hmisc)
+library(grid)
+fileUrl <- "http://www20.statcan.gc.ca/tables-tableaux/cansim/csv/02020802-eng.zip"
+temp <- tempfile()
+download.file(fileUrl, temp)
+data.test <- read.csv(unz(temp, "02020802-eng.csv"))
+unlink(temp)
+###Above I have grabbed the data directly from the website
+data.test<-data.test[,c(-7,-6)] #Dropping "vector" columns
+colnames(data.test)<-c("Year","Geography","Line","Statistic","Population","Value") #labelling
+
+geo<-c("Atlantic provinces","Newfoundland and Labrador", #Creating vector for geographies of interest
+       "New Brunswick","Nova Scotia","Prince Edward Island",
+       "Prairie provinces","Alberta","Manitoba","Saskatchewan",
+       "British Columbia","Ontario","Quebec","Canada")
+population<-c("Females","Males","Persons under 18 years", #Creating vector for populations of interest
+              "Persons 18 to 64 years","Persons 65 years and over",
+              "Persons in economic families",
+              "Persons under 18 years in female lone-parent families",
+              "Persons under 18 years in two-parent families",
+              "Unattached individuals","All persons")
+data2<-subset(data.test,!is.na(data.test$Population)&!is.na(data.test$Geography)& #Drop NA values
+                (data.test$Geography %in% geo)) #Keep all rows where Geography column matches
+
+#Small data cleaning...reordering and renaming certain factor levels
+data2$Value<-as.numeric(as.character(data2$Value)) #Change value from factor to numeric
+#Below I am reordering the factor levels of Geography and Population since I can't do it within Hmisc functions
+data2$Geography<-ordered(data2$Geography,levels=c("Atlantic provinces","Newfoundland and Labrador",
+                                                  "New Brunswick","Nova Scotia","Prince Edward Island",
+                                                  "Prairie provinces","Alberta","Manitoba","Saskatchewan",
+                                                  "British Columbia","Ontario","Quebec","Canada"))
+data2$Population<-ordered(data2$Population,levels=c("Females","Males","Persons under 18 years",
+                                                    "Persons 18 to 64 years","Persons 65 years and over",
+                                                    "Persons in economic families","Persons under 18 years in female lone-parent families","Persons under 18 years in two-parent families","Unattached individuals","All persons",
+                                                    "Females (x 1,000)","Males (x 1,000)","Persons under 18 years (x 1,000)",
+                                                    "Persons 18 to 64 years (x 1,000)","Persons 65 years and over (x 1,000)",
+                                                    "Persons in economic families (x 1,000)",
+                                                    "Persons under 18 years in female lone-parent families (x 1,000)",
+                                                    "Persons under 18 years in two-parent families (x 1,000)",
+                                                    "Unattached individuals (x 1,000)","All persons (x 1,000)")
+)
+data2$Population<-revalue(data2$Population,c("Persons under 18 years in female lone-parent families"="Child in single mother families","Persons under 18 years in two-parent families"="Child in two-parent families"))
+#End of data cleaning
+
 
 #subset
 relativepov <-subset(data2,data2$Line=="Low income measure after tax")
 
 summary(relativepov$Line)
+summary(relativepov$Statistic)
+summary(relativepov$Population)
 
 #1. What is the overall canadian poverty trend over time relative LIM measure?
 ggplot(data=subset(relativepov,relativepov$Geography=="Canada"&relativepov$Statistic=="Percentage of persons in low income"&
